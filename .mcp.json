@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "lettr": {
+      "command": "node",
+      "args": ["dist/index.js"],
+      "env": {
+        "LETTR_API_KEY": "${LETTR_API_KEY}"
+      }
+    },
+    "lettr-dev": {
+      "command": "node",
+      "args": ["dist/index.js", "--key", "${LETTR_API_KEY}"],
+      "env": {}
+    }
+  }
+}
