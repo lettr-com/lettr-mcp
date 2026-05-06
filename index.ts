@@ -7,6 +7,8 @@ import packageJson from './package.json' with { type: 'json' };
 import {
   addDomainTools,
   addEmailTools,
+  addProjectTools,
+  addSystemTools,
   addTemplateTools,
   addWebhookTools,
 } from './tools/index.js';
@@ -40,6 +42,8 @@ addEmailTools(server, lettr, { senderEmailAddress, replierEmailAddress });
 addTemplateTools(server, lettr);
 addDomainTools(server, lettr);
 addWebhookTools(server, lettr);
+addProjectTools(server, lettr);
+addSystemTools(server, lettr);
 
 async function main() {
   const transport = new StdioServerTransport();

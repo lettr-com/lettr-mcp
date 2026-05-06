@@ -69,22 +69,28 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
       inputSchema: {
         project_id: z
           .number()
+          .int()
+          .min(1)
           .optional()
           .describe(
             "Project ID to filter templates. If not provided, uses the team's default project.",
           ),
         per_page: z
           .number()
+          .int()
           .min(1)
           .max(100)
           .optional()
           .describe('Number of results per page (1-100). Default: 25'),
-        page: z.number().min(1).optional().describe('Page number. Default: 1'),
+        page: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe('Page number. Default: 1'),
       },
     },
     async ({ project_id, per_page, page }) => {
-      console.error('Debug - Listing templates');
-
       const query: Record<string, string | number | undefined> = {};
       if (project_id) query.project_id = project_id;
       if (per_page) query.per_page = per_page;
@@ -144,8 +150,6 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
       },
     },
     async ({ slug, project_id }) => {
-      console.error(`Debug - Getting template: ${slug}`);
-
       const query: Record<string, string | number | undefined> = {};
       if (project_id) query.project_id = project_id;
 
@@ -185,6 +189,7 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
         name: z
           .string()
           .nonempty()
+          .max(255)
           .describe('Name of the template (max 255 characters)'),
         html: z
           .string()
@@ -200,12 +205,16 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
           ),
         project_id: z
           .number()
+          .int()
+          .min(1)
           .optional()
           .describe(
             "Project ID to create the template in. If not provided, uses the team's default project.",
           ),
         folder_id: z
           .number()
+          .int()
+          .min(1)
           .optional()
           .describe(
             'Folder ID within the project. If not provided, uses the first folder.',
@@ -213,7 +222,11 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
       },
     },
     async ({ name, html, json, project_id, folder_id }) => {
-      console.error(`Debug - Creating template: ${name}`);
+      if (html && json) {
+        throw new Error(
+          'html and json are mutually exclusive — provide only one.',
+        );
+      }
 
       const body: Record<string, unknown> = { name };
       if (html) body.html = html;
@@ -251,7 +264,11 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
         "Update an existing template's name and/or content. Providing new html or json content creates a new version automatically. The html and json fields are mutually exclusive.",
       inputSchema: {
         slug: z.string().nonempty().describe('The template slug to update'),
-        name: z.string().optional().describe('New name for the template'),
+        name: z
+          .string()
+          .max(255)
+          .optional()
+          .describe('New name for the template'),
         html: z
           .string()
           .optional()
@@ -266,6 +283,8 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
           ),
         project_id: z
           .number()
+          .int()
+          .min(1)
           .optional()
           .describe(
             "Project ID to find the template in. If not provided, uses the team's default project.",
@@ -273,7 +292,11 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
       },
     },
     async ({ slug, name, html, json, project_id }) => {
-      console.error(`Debug - Updating template: ${slug}`);
+      if (html && json) {
+        throw new Error(
+          'html and json are mutually exclusive — provide only one.',
+        );
+      }
 
       const body: Record<string, unknown> = {};
       if (name) body.name = name;
@@ -320,12 +343,10 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
       },
     },
     async ({ slug, project_id }) => {
-      console.error(`Debug - Deleting template: ${slug}`);
-
       const query: Record<string, string | number | undefined> = {};
       if (project_id) query.project_id = project_id;
 
-      await lettr.delete<LettrResponse<undefined>>(
+      await lettr.delete<{ message: string }>(
         `/templates/${encodeURIComponent(slug)}`,
         query,
       );
@@ -364,8 +385,6 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
       },
     },
     async ({ slug, project_id, version }) => {
-      console.error(`Debug - Getting merge tags for template: ${slug}`);
-
       const query: Record<string, string | number | undefined> = {};
       if (project_id) query.project_id = project_id;
       if (version) query.version = version;
@@ -411,6 +430,55 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
             type: 'text',
             text: `Merge tags for "${template_slug}" (version ${ver}):\n\n${tagList}`,
           },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    'get-template-html',
+    {
+      title: 'Get Template HTML',
+      description:
+        'Retrieve a rendered template by project_id and slug. Returns the HTML body, the subject (if set) and the list of merge tags (each with key, name and required flag). This endpoint uses a non-standard {success, data} response envelope.',
+      inputSchema: {
+        project_id: z
+          .number()
+          .int()
+          .min(1)
+          .describe('Project ID containing the template. Required.'),
+        slug: z
+          .string()
+          .nonempty()
+          .max(255)
+          .describe('Template slug. Required.'),
+      },
+    },
+    async ({ project_id, slug }) => {
+      const response = await lettr.get<{
+        success: true;
+        data: {
+          html: string;
+          merge_tags: Array<{ key: string; name: string; required: boolean }>;
+          subject?: string | null;
+        };
+      }>('/templates/html', { project_id, slug });
+
+      const { html, merge_tags, subject } = response.data;
+      const tagLines = merge_tags
+        .map(
+          (m) =>
+            `- ${m.key} (${m.name})${m.required ? ' [required]' : ' [optional]'}`,
+        )
+        .join('\n');
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Template "${slug}" — subject: ${subject ?? '(none)'}${merge_tags.length > 0 ? `\n\nMerge tags:\n${tagLines}` : ''}`,
+          },
+          { type: 'text', text: `--- HTML ---\n${html}` },
         ],
       };
     },

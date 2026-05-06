@@ -14,10 +14,12 @@ The official [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) se
 
 ## Features
 
-- **Send Emails** — Send transactional emails with HTML, plain text, CC/BCC, attachments, tracking options, metadata, and tags. Supports [template-based sending](https://docs.lettr.com/learn/templates/introduction) with merge tag substitution.
-- **Templates** — List, create, get, update, and delete email templates. Retrieve [merge tags](https://docs.lettr.com/learn/templates/template-language) to discover which variables a template expects before sending.
+- **Send Emails** — Send transactional emails with HTML, plain text, CC/BCC, attachments, tracking options, metadata, and tags. Supports [template-based sending](https://docs.lettr.com/learn/templates/introduction) with merge tag substitution, scheduled delivery, and inspecting sent messages and events.
+- **Templates** — List, create, get, update, and delete email templates. Retrieve rendered HTML and [merge tags](https://docs.lettr.com/learn/templates/template-language) to discover which variables a template expects before sending.
 - **Domains** — List, create, get, delete, and [verify sending domains](https://docs.lettr.com/learn/domains/sending-domains). View DNS records required for SPF, DKIM, and DMARC authentication.
-- **Webhooks** — List and inspect [webhook configurations](https://docs.lettr.com/learn/webhooks/introduction) for real-time email event notifications.
+- **Webhooks** — List, create, get, update, and delete [webhook configurations](https://docs.lettr.com/learn/webhooks/introduction) for real-time email event notifications.
+- **Projects** — List the projects available to your team so you can target template and email tools at a specific project.
+- **System** — Health check and API key validation for client setup and diagnostics.
 
 ## Setup
 
@@ -92,6 +94,12 @@ Environment variables:
 | Tool | Description |
 |------|-------------|
 | `send-email` | Send a transactional email with HTML, plain text, templates, attachments, tracking, and personalization |
+| `list-emails` | List recently sent emails (cursor-paginated, with recipient and date filters) |
+| `list-email-events` | List email events (delivery, bounce, click, open, …) with filters by type, recipient, transmission, and date range |
+| `get-email-detail` | Retrieve the full delivery timeline for a single transmission by request ID |
+| `schedule-email` | Schedule a transactional email for future delivery (5+ minutes ahead, within 3 days) |
+| `get-scheduled-email` | Get the state and events of a scheduled transmission |
+| `cancel-scheduled-email` | Cancel a scheduled transmission before it is sent |
 
 ### Templates
 
@@ -103,6 +111,7 @@ Environment variables:
 | `update-template` | Update template name and/or content (creates new version) |
 | `delete-template` | Permanently delete a template and all versions |
 | `get-merge-tags` | Discover merge tag variables a template expects |
+| `get-template-html` | Retrieve a template's rendered HTML, subject, and merge tags by project ID and slug |
 
 ### Domains
 
@@ -120,6 +129,22 @@ Environment variables:
 |------|-------------|
 | `list-webhooks` | List all webhook configurations |
 | `get-webhook` | Get webhook details and delivery status |
+| `create-webhook` | Create a new webhook subscription with auth and event-type selection |
+| `update-webhook` | Update an existing webhook (name, URL, auth, events, active flag) |
+| `delete-webhook` | Delete a webhook subscription |
+
+### Projects
+
+| Tool | Description |
+|------|-------------|
+| `list-projects` | List projects owned by the team — useful for discovering project IDs |
+
+### System
+
+| Tool | Description |
+|------|-------------|
+| `health-check` | Check the Lettr API health status |
+| `auth-check` | Validate the configured API key and return the team ID |
 
 ## Local Development
 
