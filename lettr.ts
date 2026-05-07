@@ -47,17 +47,20 @@ export class LettrClient {
     }
 
     const response = await fetch(url.toString(), options);
-    const json = await response.json();
+
+    const hasBody =
+      response.status !== 204 && response.headers.get('content-length') !== '0';
+    const json = hasBody ? await response.json() : undefined;
 
     if (!response.ok) {
-      const err = json as LettrError;
+      const err = (json ?? {}) as LettrError;
       const detail = err.errors
         ? `\n${Object.entries(err.errors)
             .map(([field, msgs]) => `  ${field}: ${msgs.join(', ')}`)
             .join('\n')}`
         : '';
       throw new Error(
-        `Lettr API error (${response.status}): ${err.message}${detail}`,
+        `Lettr API error (${response.status}): ${err.message ?? response.statusText}${detail}`,
       );
     }
 

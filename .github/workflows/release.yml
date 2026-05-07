@@ -1,0 +1,41 @@
+name: Release
+on:
+  release:
+    types: [published]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 1
+      - name: pnpm setup
+        uses: pnpm/action-setup@9b5745cdf0a2e8c2620f0746130f809adb911c19
+      - name: Node setup
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Install packages
+        run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Run Build
+        run: pnpm build
+      - name: Verify release tag matches package.json version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Release tag ($TAG_VERSION) does not match package.json version ($PKG_VERSION)" >&2
+            echo "Bump package.json (and commit) before creating the release." >&2
+            exit 1
+          fi
+      - name: Publish to npm
+        run: npm publish --provenance --access public
