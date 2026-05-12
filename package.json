@@ -1,6 +1,6 @@
 {
   "name": "lettr-mcp",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "MCP server for the Lettr email API — send transactional emails, manage templates, domains, and webhooks from any AI assistant",
   "keywords": [
     "lettr",
@@ -16,6 +16,13 @@
     "email-templates"
   ],
   "homepage": "https://lettr.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lettr-com/lettr-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lettr-com/lettr-mcp/issues"
+  },
   "license": "MIT",
   "type": "module",
   "bin": {
