@@ -5,6 +5,12 @@ import minimist from 'minimist';
 import { LettrClient } from './lettr.js';
 import packageJson from './package.json' with { type: 'json' };
 import {
+  addAudienceContactTools,
+  addAudienceListTools,
+  addAudienceMembershipTools,
+  addAudiencePropertyTools,
+  addAudienceSegmentTools,
+  addAudienceTopicTools,
   addDomainTools,
   addEmailTools,
   addProjectTools,
@@ -43,6 +49,12 @@ addTemplateTools(server, lettr);
 addDomainTools(server, lettr);
 addWebhookTools(server, lettr);
 addProjectTools(server, lettr);
+addAudienceListTools(server, lettr);
+addAudienceContactTools(server, lettr);
+addAudienceMembershipTools(server, lettr);
+addAudienceTopicTools(server, lettr);
+addAudiencePropertyTools(server, lettr);
+addAudienceSegmentTools(server, lettr);
 addSystemTools(server, lettr);
 
 async function main() {
