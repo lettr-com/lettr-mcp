@@ -348,6 +348,7 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
 
       await lettr.delete<{ message: string }>(
         `/templates/${encodeURIComponent(slug)}`,
+        undefined,
         query,
       );
 

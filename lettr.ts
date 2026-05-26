@@ -41,7 +41,13 @@ export class LettrClient {
 
     const options: RequestInit = { method, headers };
 
-    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+    if (
+      body &&
+      (method === 'POST' ||
+        method === 'PUT' ||
+        method === 'PATCH' ||
+        method === 'DELETE')
+    ) {
       headers['Content-Type'] = 'application/json';
       options.body = JSON.stringify(body);
     }
@@ -90,10 +96,19 @@ export class LettrClient {
     return this.request<T>('PUT', path, body, query);
   }
 
-  async delete<T>(
+  async patch<T>(
     path: string,
+    body?: Record<string, unknown>,
     query?: Record<string, string | number | undefined>,
   ): Promise<T> {
-    return this.request<T>('DELETE', path, undefined, query);
+    return this.request<T>('PATCH', path, body, query);
+  }
+
+  async delete<T>(
+    path: string,
+    body?: Record<string, unknown>,
+    query?: Record<string, string | number | undefined>,
+  ): Promise<T> {
+    return this.request<T>('DELETE', path, body, query);
   }
 }

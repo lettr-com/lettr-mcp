@@ -19,6 +19,7 @@ The official [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) se
 - **Domains** — List, create, get, delete, and [verify sending domains](https://docs.lettr.com/learn/domains/sending-domains). View DNS records required for SPF, DKIM, and DMARC authentication.
 - **Webhooks** — List, create, get, update, and delete [webhook configurations](https://docs.lettr.com/learn/webhooks/introduction) for real-time email event notifications.
 - **Projects** — List the projects available to your team so you can target template and email tools at a specific project.
+- **Audience** — Manage contacts, lists, subscription topics, custom properties, and segments. Create and update contacts (with double opt-in), attach contacts to lists and topics, bulk import, and build segments from match conditions.
 - **System** — Health check and API key validation for client setup and diagnostics.
 
 ## Setup
@@ -138,6 +139,44 @@ Environment variables:
 | Tool | Description |
 |------|-------------|
 | `list-projects` | List projects owned by the team — useful for discovering project IDs |
+
+### Audience
+
+| Tool | Description |
+|------|-------------|
+| `list-audience-lists` | List audience (contact) lists with pagination |
+| `create-audience-list` | Create a new audience list |
+| `get-audience-list` | Get a single list and its contact count |
+| `update-audience-list` | Rename an audience list |
+| `delete-audience-list` | Delete an audience list |
+| `bulk-delete-audience-lists` | Delete up to 50 lists in one call |
+| `list-audience-contacts` | List contacts with search, status, list, and segment filters |
+| `get-audience-contact` | Get a contact with its properties, lists, and topics |
+| `create-audience-contact` | Create a contact, optionally with double opt-in |
+| `bulk-create-audience-contacts` | Create many contacts from a list of emails |
+| `update-audience-contact` | Update a contact's email, status, or properties |
+| `delete-audience-contact` | Delete a contact |
+| `attach-contact-to-list` | Add a contact to a list |
+| `detach-contact-from-list` | Remove a contact from a list |
+| `subscribe-contact-to-topic` | Subscribe a contact to a topic |
+| `unsubscribe-contact-from-topic` | Unsubscribe a contact from a topic |
+| `bulk-attach-contacts-to-lists` | Attach many contacts to many lists at once |
+| `bulk-detach-contacts-from-lists` | Detach many contacts from many lists at once |
+| `list-audience-topics` | List subscription topics with pagination |
+| `create-audience-topic` | Create a subscription topic |
+| `get-audience-topic` | Get a single topic |
+| `update-audience-topic` | Update a topic's name, description, or visibility |
+| `delete-audience-topic` | Delete a subscription topic |
+| `list-audience-properties` | List custom contact properties |
+| `create-audience-property` | Define a new custom property |
+| `get-audience-property` | Get a single property |
+| `update-audience-property` | Update a property's fallback value |
+| `delete-audience-property` | Delete a custom property |
+| `list-audience-segments` | List segments, optionally filtered by list |
+| `create-audience-segment` | Create a segment from match conditions |
+| `get-audience-segment` | Get a single segment and its conditions |
+| `update-audience-segment` | Update a segment's name, list, or conditions |
+| `delete-audience-segment` | Delete a segment |
 
 ### System
 

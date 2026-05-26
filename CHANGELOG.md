@@ -5,6 +5,19 @@ All notable changes to the Lettr MCP project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-05-26
+
+### Added
+
+- Audience management tools covering the Lettr audience API (every endpoint except the public double opt-in confirmation):
+  - Lists: `list-audience-lists`, `create-audience-list`, `get-audience-list`, `update-audience-list`, `delete-audience-list`, `bulk-delete-audience-lists`
+  - Contacts: `list-audience-contacts`, `get-audience-contact`, `create-audience-contact` (with double opt-in), `bulk-create-audience-contacts`, `update-audience-contact`, `delete-audience-contact`
+  - Membership: `attach-contact-to-list`, `detach-contact-from-list`, `subscribe-contact-to-topic`, `unsubscribe-contact-from-topic`, `bulk-attach-contacts-to-lists`, `bulk-detach-contacts-from-lists`
+  - Topics: `list-audience-topics`, `create-audience-topic`, `get-audience-topic`, `update-audience-topic`, `delete-audience-topic`
+  - Properties: `list-audience-properties`, `create-audience-property`, `get-audience-property`, `update-audience-property`, `delete-audience-property`
+  - Segments: `list-audience-segments`, `create-audience-segment`, `get-audience-segment`, `update-audience-segment`, `delete-audience-segment`
+- `LettrClient` now supports `PATCH` requests and `DELETE` requests with a request body, used by the audience update and bulk-delete endpoints
+
 ## [1.1.0] - 2026-05-04
 
 ### Added
