@@ -11,6 +11,7 @@ import {
   addAudiencePropertyTools,
   addAudienceSegmentTools,
   addAudienceTopicTools,
+  addCampaignTools,
   addDomainTools,
   addEmailTools,
   addProjectTools,
@@ -55,6 +56,7 @@ addAudienceMembershipTools(server, lettr);
 addAudienceTopicTools(server, lettr);
 addAudiencePropertyTools(server, lettr);
 addAudienceSegmentTools(server, lettr);
+addCampaignTools(server, lettr);
 addSystemTools(server, lettr);
 
 async function main() {
