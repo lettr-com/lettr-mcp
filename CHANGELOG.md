@@ -5,6 +5,18 @@ All notable changes to the Lettr MCP project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-05-27
+
+### Added
+
+- Campaign tools covering the Lettr campaigns API:
+  - `list-campaigns` — paginated list with an optional `status` filter and embedded engagement stats
+  - `get-campaign` — single campaign with stats and a truncated preview of the rendered HTML content
+  - `list-campaign-events` — cursor-paginated engagement events (opens, clicks, bounces, etc.) with `event_type`, `email`, and date-range filters
+  - `send-campaign` — send a draft campaign immediately
+  - `schedule-campaign` — schedule a draft, or reschedule an already-scheduled campaign, to a future time
+  - `unschedule-campaign` — cancel a scheduled send and return the campaign to draft
+
 ## [1.2.0] - 2026-05-26
 
 ### Added

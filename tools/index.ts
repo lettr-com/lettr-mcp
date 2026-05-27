@@ -4,6 +4,7 @@ export * from './audience-memberships.js';
 export * from './audience-properties.js';
 export * from './audience-segments.js';
 export * from './audience-topics.js';
+export * from './campaigns.js';
 export * from './domains.js';
 export * from './emails.js';
 export * from './projects.js';
