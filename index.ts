@@ -38,7 +38,7 @@ if (!apiKey) {
   process.exit(1);
 }
 
-const lettr = new LettrClient(apiKey);
+const lettr = new LettrClient(apiKey, packageJson.version);
 
 const server = new McpServer({
   name: 'lettr',

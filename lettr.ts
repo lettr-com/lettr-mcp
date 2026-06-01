@@ -13,9 +13,11 @@ export interface LettrResponse<T> {
 
 export class LettrClient {
   private apiKey: string;
+  private version: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, version: string) {
     this.apiKey = apiKey;
+    this.version = version;
   }
 
   private async request<T>(
@@ -37,6 +39,7 @@ export class LettrClient {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
       Accept: 'application/json',
+      'User-Agent': `lettr-mcp/${this.version}`,
     };
 
     const options: RequestInit = { method, headers };
