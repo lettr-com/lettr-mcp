@@ -36,6 +36,48 @@ interface Pagination {
 const createPropertyValue = z.string().max(1000);
 const updatePropertyValue = z.string().max(1000).nullable();
 
+const topicSubscription = z.object({
+  id: z.string().nonempty().describe('The topic ID'),
+  subscription: z
+    .enum(['opt_in', 'opt_out'])
+    .optional()
+    .describe(
+      'Defaults to opt_in. Use opt_out to keep the contact off a topic that would otherwise auto-subscribe them.',
+    ),
+});
+
+type BulkContactErrorCode =
+  | 'missing_email'
+  | 'invalid_email'
+  | 'invalid_property_value'
+  | 'unknown_property_key'
+  | 'unknown_list'
+  | 'unknown_topic'
+  | 'invalid_topic_subscription';
+
+interface BulkContactError {
+  index: number;
+  email: string | null;
+  error_code: BulkContactErrorCode;
+  error: string;
+}
+
+interface BulkContactRef {
+  id: string;
+  email: string;
+  created: boolean;
+}
+
+interface BulkImportResult {
+  created: number;
+  already_existed: number;
+  // Absent when the API predates TPL-2105, hence optional here.
+  updated?: number;
+  error_count?: number;
+  errors?: BulkContactError[];
+  contacts?: BulkContactRef[];
+}
+
 function formatContact(c: AudienceContact): string {
   const props = Object.entries(c.properties ?? {});
   const lines = [
@@ -168,7 +210,8 @@ export function addAudienceContactTools(server: McpServer, lettr: LettrClient) {
       description: `Create a single audience contact.
 
 - \`properties\` keys must match properties already defined for the team (use list-audience-properties).
-- When \`double_opt_in\` is provided, the contact is created in \`unverified\` status and receives a confirmation email; all four of its fields (from, subject, template_slug, redirect_url) are required.`,
+- When \`double_opt_in\` is provided, the contact is created in \`unverified\` status and receives a confirmation email; all four of its fields (from, subject, template_slug, redirect_url) are required.
+- If the email already exists for the team this fails with HTTP 409 (\`resource_already_exists\`). That is a client-correctable condition, not an outage — do NOT retry it. Update the existing contact with update-audience-contact, or use bulk-create-audience-contacts with \`update_existing\` set.`,
       inputSchema: {
         email: z.email().max(255).describe('Contact email address'),
         list_id: z
@@ -235,44 +278,156 @@ export function addAudienceContactTools(server: McpServer, lettr: LettrClient) {
     'bulk-create-audience-contacts',
     {
       title: 'Bulk Create Audience Contacts',
-      description:
-        'Create many contacts at once from a list of email addresses. Optionally add all of them to a list and/or apply the same custom properties to every contact in the batch. Already-existing emails are skipped (reported separately).',
+      description: `Create many contacts in one request (max 1000).
+
+Provide exactly one of:
+- \`emails\` — a flat list of addresses, when every contact gets the same treatment.
+- \`contacts\` — one row per contact, when they differ. Each row takes its own \`properties\`, \`list_ids\` and \`topics\`, applied on top of the batch-wide \`list_ids\`, \`topics\` and \`properties\`.
+
+A row-level topic \`opt_out\` beats a batch-level \`opt_in\`. That is how you keep specific people off a topic that auto-subscribes new contacts, without a second cleanup call.
+
+\`update_existing\` (default false) controls only whether properties are merged into contacts that already exist — submitted keys overwrite, absent keys are preserved. Existing contacts are attached to the requested lists and topics either way.
+
+IMPORTANT — this call can partially succeed. Rows that fail validation are skipped and the rest of the batch still commits, so a successful response does NOT mean every row landed. Always read the reported error count back to the user rather than claiming the whole batch was imported.`,
       inputSchema: {
         emails: z
           .array(z.email().max(255))
           .min(1)
           .max(1000)
-          .describe('Email addresses to create contacts for (max 1000)'),
+          .optional()
+          .describe(
+            'Flat list of email addresses (max 1000). Mutually exclusive with `contacts`.',
+          ),
+        contacts: z
+          .array(
+            z.object({
+              email: z.email().max(255).describe('Contact email address'),
+              properties: z
+                .record(z.string(), createPropertyValue)
+                .optional()
+                .describe(
+                  'Property values for this contact only, each a string (max 1000 chars). Each key must match a property defined for the team.',
+                ),
+              list_ids: z
+                .array(z.string().nonempty())
+                .optional()
+                .describe(
+                  'Lists for this contact only, on top of the batch-wide list_ids',
+                ),
+              topics: z
+                .array(topicSubscription)
+                .optional()
+                .describe('Topic subscriptions for this contact only'),
+            }),
+          )
+          .min(1)
+          .max(1000)
+          .optional()
+          .describe(
+            'One row per contact (max 1000), when contacts differ from each other. Mutually exclusive with `emails`.',
+          ),
         list_id: z
           .string()
           .optional()
-          .describe('Optional list ID to add all contacts to'),
+          .describe(
+            'Single list ID applied to the whole batch. Kept for convenience; `list_ids` is the general form.',
+          ),
+        list_ids: z
+          .array(z.string().nonempty())
+          .max(50)
+          .optional()
+          .describe('List IDs applied to every contact in the batch (max 50)'),
+        topics: z
+          .array(topicSubscription)
+          .max(50)
+          .optional()
+          .describe(
+            'Topic subscriptions applied to every contact in the batch (max 50)',
+          ),
         properties: z
           .record(z.string(), createPropertyValue)
           .optional()
           .describe(
-            'Custom property values applied to every contact created in this batch, each as a string (max 1000 chars). Each key must match a property defined for the team.',
+            'Custom property values applied to every contact in this batch, each as a string (max 1000 chars). Each key must match a property defined for the team.',
+          ),
+        update_existing: z
+          .boolean()
+          .optional()
+          .describe(
+            'Whether to merge the submitted properties into contacts that already exist (default false)',
           ),
       },
     },
-    async ({ emails, list_id, properties }) => {
-      const body: Record<string, unknown> = { emails };
+    async ({
+      emails,
+      contacts,
+      list_id,
+      list_ids,
+      topics,
+      properties,
+      update_existing,
+    }) => {
+      if (!emails && !contacts) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: 'Provide either `emails` (a flat list of addresses) or `contacts` (one row per contact).',
+            },
+          ],
+        };
+      }
+
+      const body: Record<string, unknown> = {};
+      if (emails) body.emails = emails;
+      if (contacts) body.contacts = contacts;
       if (list_id) body.list_id = list_id;
+      if (list_ids?.length) body.list_ids = list_ids;
+      if (topics?.length) body.topics = topics;
       if (properties) body.properties = properties;
+      if (update_existing !== undefined) body.update_existing = update_existing;
 
-      const response = await lettr.post<
-        LettrResponse<{ created: number; already_existed: number }>
-      >('/audience/contacts/bulk', body);
+      const response = await lettr.post<LettrResponse<BulkImportResult>>(
+        '/audience/contacts/bulk',
+        body,
+      );
 
-      const { created, already_existed } = response.data;
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Created ${created} contact(s); ${already_existed} already existed.`,
-          },
-        ],
-      };
+      const data = response.data;
+      const errors = data.errors ?? [];
+      const errorCount = data.error_count ?? errors.length;
+
+      const lines = [
+        `Created ${data.created} contact(s); ${data.already_existed} already existed; ${data.updated ?? 0} updated.`,
+        // These two counters answer different questions ("was it already
+        // there?" vs "did we change it?") and overlap, so spelling that out
+        // stops the model reporting a total that does not add up.
+        'Note: `already existed` and `updated` overlap — a contact that existed and got a list or topic attached is counted in both, so they do not sum to the number of rows submitted.',
+      ];
+
+      if (errorCount > 0) {
+        lines.push(
+          `${errorCount} row(s) were SKIPPED and not imported. The rest of the batch did commit:`,
+        );
+        for (const e of errors) {
+          lines.push(
+            `  - row ${e.index} (${e.email ?? 'no email'}): [${e.error_code}] ${e.error}`,
+          );
+        }
+      }
+
+      const refs = data.contacts ?? [];
+      if (refs.length > 0) {
+        lines.push(
+          `Contacts (${refs.length}):`,
+          ...refs.map(
+            (c) =>
+              `  - ${c.email} (id: ${c.id}, ${c.created ? 'created' : 'existing'})`,
+          ),
+        );
+      }
+
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
     },
   );
 

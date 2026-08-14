@@ -5,6 +5,40 @@ All notable changes to the Lettr MCP project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-08-14
+
+Covers the reworked bulk contact import (TPL-2105) and the duplicate-create fix.
+Everything here is additive — existing tool calls keep working and send the same
+request bodies.
+
+### Added
+
+- `bulk-subscribe-contacts-to-topics` and `bulk-unsubscribe-contacts-from-topics`
+  tools, covering `POST` and `DELETE /audience/contacts/topics/bulk` over the
+  cartesian product of contact IDs × topic IDs (max 1000 × 50). The unsubscribe
+  tool carries the same "double-check with the user first" instruction as the
+  other bulk-removal tools
+- `bulk-create-audience-contacts` accepts a `contacts` array — one row per
+  contact, each with its own `properties`, `list_ids` and `topics` — as an
+  alternative to the flat `emails` list, plus batch-wide `list_ids`, `topics`
+  and `update_existing`. Row values stack on top of the batch-wide ones, except
+  that a row-level topic `opt_out` beats a batch-level `opt_in`, which is how a
+  topic that auto-subscribes new contacts is suppressed for specific people in
+  the same request
+
+### Changed
+
+- `bulk-create-audience-contacts` reports the full result — `updated`,
+  `error_count`, per-row `errors` and the returned `contacts` with their ids.
+  Two things the tool now states explicitly in its output, because a model
+  reading only the counters would get them wrong: skipped rows do **not** fail
+  the call (the rest of the batch commits, so a successful response is not proof
+  every row landed), and `already_existed` and `updated` overlap by design, so
+  they never sum to the number of rows submitted
+- `create-audience-contact` documents that a duplicate email now fails with HTTP
+  `409` / `resource_already_exists` rather than the misleading `500` /
+  `send_error`, that it must not be retried, and what to do instead
+
 ## [1.4.0] - 2026-06-01
 
 ### Added

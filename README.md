@@ -153,7 +153,7 @@ Environment variables:
 | `list-audience-contacts` | List contacts with search, status, list, and segment filters |
 | `get-audience-contact` | Get a contact with its properties, lists, and topics |
 | `create-audience-contact` | Create a contact, optionally with double opt-in |
-| `bulk-create-audience-contacts` | Create many contacts from a list of emails |
+| `bulk-create-audience-contacts` | Create many contacts, either from a flat list of emails or one row per contact |
 | `update-audience-contact` | Update a contact's email, status, or properties |
 | `delete-audience-contact` | Delete a contact |
 | `attach-contact-to-list` | Add a contact to a list |
@@ -162,6 +162,8 @@ Environment variables:
 | `unsubscribe-contact-from-topic` | Unsubscribe a contact from a topic |
 | `bulk-attach-contacts-to-lists` | Attach many contacts to many lists at once |
 | `bulk-detach-contacts-from-lists` | Detach many contacts from many lists at once |
+| `bulk-subscribe-contacts-to-topics` | Subscribe many contacts to many topics at once |
+| `bulk-unsubscribe-contacts-from-topics` | Unsubscribe many contacts from many topics at once |
 | `list-audience-topics` | List subscription topics with pagination |
 | `create-audience-topic` | Create a subscription topic |
 | `get-audience-topic` | Get a single topic |
