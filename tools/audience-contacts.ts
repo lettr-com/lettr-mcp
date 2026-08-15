@@ -288,7 +288,9 @@ A row-level topic \`opt_out\` beats a batch-level \`opt_in\`. That is how you ke
 
 \`update_existing\` (default false) controls only whether properties are merged into contacts that already exist — submitted keys overwrite, absent keys are preserved. Existing contacts are attached to the requested lists and topics either way.
 
-IMPORTANT — this call can partially succeed. Rows that fail validation are skipped and the rest of the batch still commits, so a successful response does NOT mean every row landed. Always read the reported error count back to the user rather than claiming the whole batch was imported.`,
+IMPORTANT — this call can partially succeed. Rows that fail validation are skipped and the rest of the batch still commits, so a successful response does NOT mean every row landed. Always read the reported error count back to the user rather than claiming the whole batch was imported.
+
+With \`contacts\`, pass rows through as the user gave them — a malformed address is reported back as a skipped row, so do not drop or "fix" entries yourself first. With \`emails\`, a single invalid address rejects the whole request, so check them before sending.`,
       inputSchema: {
         emails: z
           .array(z.email().max(255))
@@ -301,7 +303,17 @@ IMPORTANT — this call can partially succeed. Rows that fail validation are ski
         contacts: z
           .array(
             z.object({
-              email: z.email().max(255).describe('Contact email address'),
+              // Deliberately not z.email(): the API skips a malformed row and
+              // commits the rest, reporting it as `invalid_email` in `errors`.
+              // Validating the address here would reject the whole batch
+              // instead, so one bad row in a pasted list would import nothing.
+              // The flat `emails` field above stays strict because there the
+              // API does reject the whole request (422).
+              email: z
+                .string()
+                .nonempty()
+                .max(255)
+                .describe('Contact email address'),
               properties: z
                 .record(z.string(), createPropertyValue)
                 .optional()
@@ -310,14 +322,16 @@ IMPORTANT — this call can partially succeed. Rows that fail validation are ski
                 ),
               list_ids: z
                 .array(z.string().nonempty())
+                .max(50)
                 .optional()
                 .describe(
-                  'Lists for this contact only, on top of the batch-wide list_ids',
+                  'Lists for this contact only (max 50), on top of the batch-wide list_ids',
                 ),
               topics: z
                 .array(topicSubscription)
+                .max(50)
                 .optional()
-                .describe('Topic subscriptions for this contact only'),
+                .describe('Topic subscriptions for this contact only (max 50)'),
             }),
           )
           .min(1)

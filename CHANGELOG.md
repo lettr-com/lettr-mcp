@@ -38,6 +38,13 @@ request bodies.
 - `create-audience-contact` documents that a duplicate email now fails with HTTP
   `409` / `resource_already_exists` rather than the misleading `500` /
   `send_error`, that it must not be retried, and what to do instead
+- A row of `contacts` no longer has its email address validated before the
+  request is sent. The API skips a malformed row and commits the rest of the
+  batch, so validating here rejected the whole import over a single bad address
+  — the one case the per-row shape exists to handle. The address is now checked
+  by the API and comes back as an `invalid_email` entry in `errors`. The flat
+  `emails` list is still validated up front, because there the API rejects the
+  whole request too
 
 ## [1.4.0] - 2026-06-01
 
