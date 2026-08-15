@@ -191,4 +191,83 @@ export function addAudienceMembershipTools(
       };
     },
   );
+
+  server.registerTool(
+    'bulk-subscribe-contacts-to-topics',
+    {
+      title: 'Bulk Subscribe Contacts to Topics',
+      description:
+        'Subscribe multiple contacts to multiple topics at once. Every contact is subscribed to every topic (a cartesian product of contact_ids × topic_ids). All IDs must belong to your team.',
+      inputSchema: {
+        contact_ids: z
+          .array(z.string().nonempty())
+          .min(1)
+          .max(1000)
+          .describe('Contact IDs to subscribe (max 1000)'),
+        topic_ids: z
+          .array(z.string().nonempty())
+          .min(1)
+          .max(50)
+          .describe('Topic IDs to subscribe the contacts to (max 50)'),
+      },
+    },
+    async ({ contact_ids, topic_ids }) => {
+      const response = await lettr.post<
+        LettrResponse<{
+          subscribed: number;
+          already_subscribed: number;
+          total_pairs: number;
+        }>
+      >('/audience/contacts/topics/bulk', { contact_ids, topic_ids });
+
+      const { subscribed, already_subscribed, total_pairs } = response.data;
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Subscribed ${subscribed} of ${total_pairs} contact-topic pair(s); ${already_subscribed} were already subscribed.`,
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerTool(
+    'bulk-unsubscribe-contacts-from-topics',
+    {
+      title: 'Bulk Unsubscribe Contacts from Topics',
+      description:
+        'Unsubscribe multiple contacts from multiple topics at once (a cartesian product of contact_ids × topic_ids). Before using this tool, you MUST double-check with the user, as it drops many subscriptions at once.',
+      inputSchema: {
+        contact_ids: z
+          .array(z.string().nonempty())
+          .min(1)
+          .max(1000)
+          .describe('Contact IDs to unsubscribe (max 1000)'),
+        topic_ids: z
+          .array(z.string().nonempty())
+          .min(1)
+          .max(50)
+          .describe('Topic IDs to unsubscribe the contacts from (max 50)'),
+      },
+    },
+    async ({ contact_ids, topic_ids }) => {
+      const response = await lettr.delete<
+        LettrResponse<{
+          unsubscribed: number;
+          total_pairs: number;
+        }>
+      >('/audience/contacts/topics/bulk', { contact_ids, topic_ids });
+
+      const { unsubscribed, total_pairs } = response.data;
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Unsubscribed ${unsubscribed} of ${total_pairs} contact-topic pair(s).`,
+          },
+        ],
+      };
+    },
+  );
 }
