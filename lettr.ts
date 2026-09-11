@@ -162,7 +162,11 @@ export class LettrClient {
 
     return {
       data,
-      replayed: headers.get('Idempotency-Replayed') === 'true',
+      // Case-insensitive to match every Lettr SDK. The spec pins the value to
+      // the literal 'true', but a strict compare here would silently report
+      // "not replayed" if that ever varied - and a missed replay reads as a
+      // second email having gone out.
+      replayed: headers.get('Idempotency-Replayed')?.toLowerCase() === 'true',
     };
   }
 
