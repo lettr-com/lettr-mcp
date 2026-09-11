@@ -15,7 +15,7 @@ The official [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) se
 ## Features
 
 - **Send Emails** — Send transactional emails with HTML, plain text, CC/BCC, attachments, tracking options, metadata, and tags. Supports [template-based sending](https://docs.lettr.com/learn/templates/introduction) with merge tag substitution, scheduled delivery, and inspecting sent messages and events.
-- **Templates** — List, create, get, update, and delete email templates. Retrieve rendered HTML and [merge tags](https://docs.lettr.com/learn/templates/template-language) to discover which variables a template expects before sending.
+- **Templates** — List, create, get, update, and delete email templates, transactional or campaign. Retrieve rendered HTML and [merge tags](https://docs.lettr.com/learn/templates/template-language) to discover which variables a template expects before sending.
 - **Domains** — List, create, get, delete, and [verify sending domains](https://docs.lettr.com/learn/domains/sending-domains). View DNS records required for SPF, DKIM, and DMARC authentication.
 - **Webhooks** — List, create, get, update, and delete [webhook configurations](https://docs.lettr.com/learn/webhooks/introduction) for real-time email event notifications.
 - **Projects** — List the projects available to your team so you can target template and email tools at a specific project.
@@ -106,13 +106,25 @@ Environment variables:
 
 | Tool | Description |
 |------|-------------|
-| `list-templates` | List email templates with pagination |
+| `list-templates` | List email templates, filterable by purpose and folder |
 | `get-template` | Get full template details including HTML content |
-| `create-template` | Create a new template with HTML or visual editor JSON |
+| `create-template` | Create a new template with HTML or visual editor JSON, transactional or campaign |
 | `update-template` | Update template name and/or content (creates new version) |
 | `delete-template` | Permanently delete a template and all versions |
 | `get-merge-tags` | Discover merge tag variables a template expects |
 | `get-template-html` | Retrieve a template's rendered HTML, subject, and merge tags by project ID and slug |
+
+**Template purpose.** A template is either `transactional` (the default — receipts, password resets, alerts) or `campaign` (marketing sent to an audience list). A campaign can only send a template whose purpose is `campaign`, and the purpose cannot be changed after creation, so a newsletter created with the default has to be rebuilt. Pass `purpose` to `create-template` whenever the message is going to an audience rather than to one person.
+
+**Preparation status.** Imported templates render asynchronously, so a template can exist before it is sendable. `list-templates` and `get-template` report `pending`, `ready` or `failed`. After an *update* the previous render keeps serving until the new one settles, so a pending template still sends — just not yet the new content.
+
+### Folders
+
+| Tool | Description |
+|------|-------------|
+| `list-folders` | List the folders templates are filed into, with purpose and template count |
+
+Folders are the only way to discover a `folder_id`. Without this tool the choice is to omit `folder_id` and accept whichever folder the API picks, or to guess an integer read out of an app URL. A folder's purpose is independent of its templates' — filing a template in a campaign folder does not make it a campaign template.
 
 ### Domains
 

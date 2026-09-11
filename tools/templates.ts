@@ -2,12 +2,25 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { LettrClient, LettrResponse } from '../lettr.js';
 
+type TemplatePurpose = 'transactional' | 'campaign';
+
+/**
+ * Whether the rendered HTML behind a template is current.
+ *
+ * An imported template is prepared asynchronously, so it exists before it is
+ * renderable. Absent on an API that predates the field, which is why every
+ * read falls back to 'ready' rather than blocking.
+ */
+type TemplatePreparationStatus = 'pending' | 'ready' | 'failed';
+
 interface TemplateListItem {
   id: number;
   name: string;
   slug: string;
   project_id: number;
   folder_id: number;
+  purpose?: TemplatePurpose;
+  preparation_status?: TemplatePreparationStatus;
   created_at: string;
   updated_at: string;
 }
@@ -25,6 +38,8 @@ interface CreatedTemplate {
   slug: string;
   project_id: number;
   folder_id: number;
+  purpose?: TemplatePurpose;
+  preparation_status?: TemplatePreparationStatus;
   active_version: number;
   merge_tags: MergeTag[];
   created_at: string;
@@ -60,11 +75,13 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
       title: 'List Templates',
       description: `**Purpose:** List email templates with pagination. Returns template names, slugs, and project info.
 
-**Returns:** Paginated list of templates with id, name, slug, project_id, folder_id, timestamps.
+**Returns:** Paginated list of templates with id, name, slug, project_id, folder_id, purpose, preparation status and timestamps.
 
 **When to use:**
 - User asks "show my templates", "what templates do I have?"
 - Before sending a template-based email, to find the template slug
+- Filter by purpose=campaign to find templates a campaign can actually use
+- Filter by folder_id to reconcile a bulk import in one call instead of one get-template per template
 - Use get-template for full details of a specific template`,
       inputSchema: {
         project_id: z
@@ -82,6 +99,20 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
           .max(100)
           .optional()
           .describe('Number of results per page (1-100). Default: 25'),
+        purpose: z
+          .enum(['transactional', 'campaign'])
+          .optional()
+          .describe(
+            'Only return templates of this purpose. Use campaign to find templates that a campaign can send.',
+          ),
+        folder_id: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(
+            'Only return templates in this folder. A folder outside the resolved project is an error, not an empty list, so a wrong id cannot be misread as "nothing there yet". Use list-folders to find one.',
+          ),
         page: z
           .number()
           .int()
@@ -90,9 +121,11 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
           .describe('Page number. Default: 1'),
       },
     },
-    async ({ project_id, per_page, page }) => {
+    async ({ project_id, purpose, folder_id, per_page, page }) => {
       const query: Record<string, string | number | undefined> = {};
       if (project_id) query.project_id = project_id;
+      if (purpose) query.purpose = purpose;
+      if (folder_id) query.folder_id = folder_id;
       if (per_page) query.per_page = per_page;
       if (page) query.page = page;
 
@@ -113,10 +146,16 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
       }
 
       const templateList = templates
-        .map(
-          (t) =>
-            `- ${t.name} (slug: ${t.slug}) | Project: ${t.project_id} | Updated: ${t.updated_at}`,
-        )
+        .map((t) => {
+          const purpose = t.purpose ? ` | ${t.purpose}` : '';
+          // Only worth surfacing when it is not ready - a settled template is
+          // the uninteresting case and would just add noise to every row.
+          const preparing =
+            t.preparation_status && t.preparation_status !== 'ready'
+              ? ` | preparation: ${t.preparation_status}`
+              : '';
+          return `- ${t.name} (slug: ${t.slug}) | Project: ${t.project_id}${purpose}${preparing} | Updated: ${t.updated_at}`;
+        })
         .join('\n');
 
       return {
@@ -165,6 +204,18 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
       details += `- Slug: ${t.slug}\n`;
       details += `- Project ID: ${t.project_id}\n`;
       details += `- Folder ID: ${t.folder_id}\n`;
+      details += `- Purpose: ${t.purpose ?? 'transactional'}\n`;
+      if (t.preparation_status) {
+        details += `- Preparation: ${t.preparation_status}\n`;
+        if (t.preparation_status === 'pending') {
+          details +=
+            '  (still rendering — an update keeps serving the previous HTML until this settles)\n';
+        }
+        if (t.preparation_status === 'failed') {
+          details +=
+            '  (rendering failed — this template will not send the content you imported)\n';
+        }
+      }
       details += `- Active Version: ${t.active_version ?? 'none'}\n`;
       details += `- Total Versions: ${t.versions_count}\n`;
       details += `- Created: ${t.created_at}\n`;
@@ -183,8 +234,9 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
     'create-template',
     {
       title: 'Create Template',
-      description:
-        'Create a new email template with HTML or Topol editor JSON content. Provide either html or json — they are mutually exclusive. Merge tags are automatically extracted from the content.',
+      description: `Create a new email template with HTML or Topol editor JSON content. Provide either html or json — they are mutually exclusive. Merge tags are automatically extracted from the content.
+
+**Set purpose deliberately.** It defaults to transactional, and it cannot be changed after creation. A campaign can only send a template whose purpose is campaign, so a newsletter or promotion created with the default has to be recreated from scratch. If the user is writing anything that goes to an audience list, pass purpose: "campaign".`,
       inputSchema: {
         name: z
           .string()
@@ -217,11 +269,17 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
           .min(1)
           .optional()
           .describe(
-            'Folder ID within the project. If not provided, uses the first folder.',
+            'Folder ID within the project. If not provided, uses the first folder. Use list-folders to find one.',
+          ),
+        purpose: z
+          .enum(['transactional', 'campaign'])
+          .optional()
+          .describe(
+            "What the template is for. **transactional** (default) is triggered by one user's action — a receipt, password reset, alert. **campaign** is marketing sent to an audience list, and is the ONLY kind a campaign can send. This cannot be changed later: a newsletter created as transactional must be recreated.",
           ),
       },
     },
-    async ({ name, html, json, project_id, folder_id }) => {
+    async ({ name, html, json, project_id, folder_id, purpose }) => {
       if (html && json) {
         throw new Error(
           'html and json are mutually exclusive — provide only one.',
@@ -233,6 +291,7 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
       if (json) body.json = json;
       if (project_id) body.project_id = project_id;
       if (folder_id) body.folder_id = folder_id;
+      if (purpose) body.purpose = purpose;
 
       const response = await lettr.post<LettrResponse<CreatedTemplate>>(
         '/templates',
@@ -249,7 +308,7 @@ export function addTemplateTools(server: McpServer, lettr: LettrClient) {
         content: [
           {
             type: 'text',
-            text: `Template created successfully!\nName: ${t.name}\nSlug: ${t.slug}\nVersion: ${t.active_version}${mergeTags}`,
+            text: `Template created successfully!\nName: ${t.name}\nSlug: ${t.slug}\nPurpose: ${t.purpose ?? 'transactional'}\nVersion: ${t.active_version}${mergeTags}`,
           },
         ],
       };

@@ -381,21 +381,55 @@ export function addEmailTools(
 - User says "email this to X", "notify them", "send a message to..."
 - Sending with a template: use template_slug and substitution_data (subject is optional in this case)
 
-**Key trigger phrases:** "Send an email", "Email this to", "Notify", "Send a message", "Reply to them"`,
-      inputSchema: sendEmailShape(senderEmailAddress, replierEmailAddress),
+**Key trigger phrases:** "Send an email", "Email this to", "Notify", "Send a message", "Reply to them"
+
+**Retrying:** pass idempotency_key and reuse the same value on a retry. Without it, a retry after a timeout sends the email twice — the first attempt may well have succeeded and only the response was lost.`,
+      inputSchema: {
+        ...sendEmailShape(senderEmailAddress, replierEmailAddress),
+        idempotency_key: z
+          .string()
+          .min(1)
+          .max(255)
+          .optional()
+          .describe(
+            'Opaque key making this send safe to retry. Reuse the SAME value when retrying and the API returns the original result instead of delivering a second email. Derive it from what the send is about (e.g. "order-12345-receipt"), not from a timestamp or random value — a fresh key on a retry defeats the point. Keys are kept 24 hours and are scoped per team and API key.',
+          ),
+      },
     },
     async (input) => {
       const body = await buildSendEmailBody(input, defaults);
-      const response = await lettr.post<LettrResponse<SendEmailResponse>>(
-        '/emails',
-        body,
-      );
+
+      // Keyless sends keep the plain path: with no key there is nothing to
+      // replay, so there is no header worth reading back.
+      if (!input.idempotency_key) {
+        const response = await lettr.post<LettrResponse<SendEmailResponse>>(
+          '/emails',
+          body,
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Email sent successfully! Request ID: ${response.data.request_id}, Accepted: ${response.data.accepted}, Rejected: ${response.data.rejected}`,
+            },
+          ],
+        };
+      }
+
+      const { data: response, replayed } = await lettr.postIdempotent<
+        LettrResponse<SendEmailResponse>
+      >('/emails', body, input.idempotency_key);
+
+      const outcome = replayed
+        ? 'Replayed an earlier send with this idempotency key — no second email went out.'
+        : 'Email sent successfully!';
 
       return {
         content: [
           {
             type: 'text',
-            text: `Email sent successfully! Request ID: ${response.data.request_id}, Accepted: ${response.data.accepted}, Rejected: ${response.data.rejected}`,
+            text: `${outcome} Request ID: ${response.data.request_id}, Accepted: ${response.data.accepted}, Rejected: ${response.data.rejected}`,
           },
         ],
       };

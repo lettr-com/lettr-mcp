@@ -7,6 +7,7 @@ export * from './audience-topics.js';
 export * from './campaigns.js';
 export * from './domains.js';
 export * from './emails.js';
+export * from './folders.js';
 export * from './projects.js';
 export * from './system.js';
 export * from './templates.js';
