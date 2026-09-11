@@ -6,6 +6,18 @@ export interface LettrError {
   errors?: Record<string, string[]>;
 }
 
+/**
+ * A send that reused an idempotency key.
+ *
+ * `replayed` is read from the `Idempotency-Replayed` response header, not the
+ * body: the API returns the original transmission verbatim, so the body alone
+ * cannot tell you whether a second email actually went out.
+ */
+export interface WithReplayed<T> {
+  data: T;
+  replayed: boolean;
+}
+
 export interface LettrResponse<T> {
   message: string;
   data: T;
@@ -25,7 +37,25 @@ export class LettrClient {
     path: string,
     body?: Record<string, unknown>,
     query?: Record<string, string | number | undefined>,
+    extraHeaders?: Record<string, string>,
   ): Promise<T> {
+    const { data } = await this.requestWithHeaders<T>(
+      method,
+      path,
+      body,
+      query,
+      extraHeaders,
+    );
+    return data;
+  }
+
+  private async requestWithHeaders<T>(
+    method: string,
+    path: string,
+    body?: Record<string, unknown>,
+    query?: Record<string, string | number | undefined>,
+    extraHeaders?: Record<string, string>,
+  ): Promise<{ data: T; headers: Headers }> {
     const url = new URL(`${BASE_URL}${path}`);
 
     if (query) {
@@ -40,6 +70,7 @@ export class LettrClient {
       Authorization: `Bearer ${this.apiKey}`,
       Accept: 'application/json',
       'User-Agent': `lettr-mcp/${this.version}`,
+      ...extraHeaders,
     };
 
     const options: RequestInit = { method, headers };
@@ -68,12 +99,30 @@ export class LettrClient {
             .map(([field, msgs]) => `  ${field}: ${msgs.join(', ')}`)
             .join('\n')}`
         : '';
+
+      // The two idempotency 409s look identical but call for opposite
+      // reactions, so say which one happened rather than leaving the agent to
+      // guess from the message.
+      if (response.status === 409) {
+        const retryAfter = response.headers.get('Retry-After');
+        if (err.error_code === 'idempotency_in_progress') {
+          throw new Error(
+            `Lettr API error (409): an earlier send with this idempotency key is still in flight. Retry with the SAME key${retryAfter ? ` after ${retryAfter}s` : ''}.`,
+          );
+        }
+        if (err.error_code === 'idempotency_key_conflict') {
+          throw new Error(
+            'Lettr API error (409): this idempotency key was already used with a different payload. Do NOT retry — it will fail identically forever. Use a new key, or resend the original payload.',
+          );
+        }
+      }
+
       throw new Error(
         `Lettr API error (${response.status}): ${err.message ?? response.statusText}${detail}`,
       );
     }
 
-    return json as T;
+    return { data: json as T, headers: response.headers };
   }
 
   async get<T>(
@@ -87,8 +136,34 @@ export class LettrClient {
     path: string,
     body?: Record<string, unknown>,
     query?: Record<string, string | number | undefined>,
+    headers?: Record<string, string>,
   ): Promise<T> {
-    return this.request<T>('POST', path, body, query);
+    return this.request<T>('POST', path, body, query, headers);
+  }
+
+  /**
+   * POST an idempotent request.
+   *
+   * Reusing the key returns the original result instead of repeating the
+   * action; `replayed` says whether that is what happened.
+   */
+  async postIdempotent<T>(
+    path: string,
+    body: Record<string, unknown>,
+    idempotencyKey: string,
+  ): Promise<WithReplayed<T>> {
+    const { data, headers } = await this.requestWithHeaders<T>(
+      'POST',
+      path,
+      body,
+      undefined,
+      { 'Idempotency-Key': idempotencyKey },
+    );
+
+    return {
+      data,
+      replayed: headers.get('Idempotency-Replayed') === 'true',
+    };
   }
 
   async put<T>(

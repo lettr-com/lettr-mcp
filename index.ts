@@ -14,6 +14,7 @@ import {
   addCampaignTools,
   addDomainTools,
   addEmailTools,
+  addFolderTools,
   addProjectTools,
   addSystemTools,
   addTemplateTools,
@@ -47,6 +48,7 @@ const server = new McpServer({
 
 addEmailTools(server, lettr, { senderEmailAddress, replierEmailAddress });
 addTemplateTools(server, lettr);
+addFolderTools(server, lettr);
 addDomainTools(server, lettr);
 addWebhookTools(server, lettr);
 addProjectTools(server, lettr);

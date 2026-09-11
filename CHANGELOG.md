@@ -5,6 +5,52 @@ All notable changes to the Lettr MCP project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-09-11
+
+Brings the MCP server level with the SDKs: template purpose, the folders
+endpoint, preparation status, folder filtering and idempotent sends (TPL-2459,
+TPL-2539). Everything is additive — existing tool calls keep working and send
+identical requests.
+
+### Added
+
+- **`purpose` on `create-template`** — `transactional` (the default) or
+  `campaign`. This is the one that matters: a campaign can only send a template
+  whose purpose is `campaign`, and the purpose cannot be changed afterwards, so
+  an agent that took the default for a newsletter had to rebuild it from
+  scratch. The tool description explains the split rather than just naming the
+  enum, because an agent has no other way to know a campaign needs a marketing
+  template. The created-template output now states the purpose, so a wrong one
+  is visible immediately instead of at send time.
+- **`list-folders` tool** — the folders templates are filed into, each with its
+  purpose and template count. Nothing else in the API returns a folder id, so
+  before this the only options were to omit `folder_id` and accept whichever
+  folder the API picked, or to hardcode an integer read out of an app URL.
+  Read-only, because deleting a folder moves or deletes the templates inside it.
+- **`purpose` and `folder_id` filters on `list-templates`** — one
+  `per_page: 100` call reconciles a whole bulk import, instead of a
+  `get-template` per template each dragging the full HTML payload against the
+  same rate limit. A folder outside the resolved project is an error rather than
+  an empty list, so a typo cannot be misread as "nothing there yet".
+- **Preparation status on template reads** — `pending`, `ready` or `failed`,
+  shown by `get-template` and by `list-templates` when a template is not ready.
+  Settled templates are left unannotated: that is the uninteresting case and
+  would only add noise to every row.
+- **`idempotency_key` on `send-email`** — reuse the same value on a retry and
+  the API returns the original result instead of delivering a second email. The
+  output says when a send was replayed, so an agent can tell "already sent" from
+  "sent again". You supply the key; the server never invents one, and the
+  description steers agents away from timestamps and random values, which defeat
+  the purpose on a retry.
+
+### Changed
+
+- A 409 during an idempotent send now says which of the two cases happened.
+  `idempotency_in_progress` is safe to retry with the *same* key and reports
+  `Retry-After`; `idempotency_key_conflict` means the key was used with a
+  different payload and will fail identically forever. They were previously
+  indistinguishable, which is the difference between waiting and giving up.
+
 ## [1.5.0] - 2026-08-14
 
 Covers the reworked bulk contact import (TPL-2105) and the duplicate-create fix.
