@@ -74,6 +74,74 @@ interface EmailDetail {
   events: EmailEvent[];
 }
 
+/**
+ * Lifecycle of a scheduled email. Lettr holds the email until it is due, so
+ * these are Lettr's own states — not the delivery states in EmailDetailState.
+ */
+type ScheduledEmailState =
+  | 'scheduled'
+  | 'sending'
+  | 'sent'
+  | 'cancelled'
+  | 'failed';
+
+/**
+ * An email waiting to be sent.
+ *
+ * Two ids, and they are not interchangeable: `request_id` (`sch_…`) addresses
+ * the scheduled email and is what get/cancel take, while `transmission_id` is
+ * the provider's id — null until the email is actually sent, and the value
+ * that appears on webhook events.
+ */
+interface ScheduledEmail {
+  request_id: string;
+  transmission_id: string | null;
+  state: ScheduledEmailState;
+  scheduled_at: string | null;
+  from: string;
+  from_name: string | null;
+  subject: string | null;
+  recipients: string[];
+  num_recipients: number;
+  accepted: number;
+  rejected: number;
+  tag: string | null;
+  failure_reason: string | null;
+  events: EmailEvent[];
+}
+
+interface ScheduledEmailsListResponse {
+  message: string;
+  data: {
+    scheduled_emails: ScheduledEmail[];
+    pagination: {
+      total: number;
+      per_page: number;
+      current_page: number;
+      last_page: number;
+    };
+  };
+}
+
+function formatScheduledEmail(d: ScheduledEmail): string {
+  return [
+    `Scheduled email: ${d.request_id}`,
+    `State: ${d.state}`,
+    d.scheduled_at ? `Scheduled for: ${d.scheduled_at}` : null,
+    `From: ${d.from_name ? `${d.from_name} <${d.from}>` : d.from}`,
+    d.subject ? `Subject: ${d.subject}` : null,
+    `Recipients (${d.num_recipients}): ${d.recipients.join(', ')}`,
+    d.tag ? `Tag: ${d.tag}` : null,
+    // Only meaningful once sent — this is the id webhook events carry.
+    d.transmission_id
+      ? `Transmission: ${d.transmission_id}`
+      : 'Transmission: not sent yet',
+    d.failure_reason ? `Failure reason: ${d.failure_reason}` : null,
+  ]
+    .filter((x): x is string => x !== null)
+    .join('\n');
+}
+
 const sendEmailShape = (
   senderEmailAddress?: string,
   replierEmailAddress?: string,
@@ -594,15 +662,15 @@ export function addEmailTools(
     'schedule-email',
     {
       title: 'Schedule Email',
-      description: `Schedule an email for future delivery. Accepts the same fields as send-email plus a required scheduled_at (ISO 8601, UTC) that is at least 5 minutes in the future and at most 3 days out.
+      description: `Schedule an email for future delivery. Accepts the same fields as send-email plus a required scheduled_at (ISO 8601, UTC) that is at least 5 minutes in the future and at most 30 days out.
 
-**Returns:** Same response as send-email (request_id + accepted/rejected counts).`,
+**Returns:** The scheduled email, including the \`sch_\` request ID that get-scheduled-email and cancel-scheduled-email take.`,
       inputSchema: {
         ...sendEmailShape(senderEmailAddress, replierEmailAddress),
         scheduled_at: z
           .string()
           .describe(
-            'ISO 8601 UTC datetime (e.g. 2024-01-16T10:00:00Z). Must be 5+ minutes in the future and within 3 days.',
+            'ISO 8601 UTC datetime (e.g. 2024-01-16T10:00:00Z). Must be 5+ minutes in the future and within 30 days.',
           ),
       },
     },
@@ -610,17 +678,12 @@ export function addEmailTools(
       const { scheduled_at, ...sendInput } = input;
       const body = await buildSendEmailBody(sendInput, defaults);
       body.scheduled_at = scheduled_at;
-      const response = await lettr.post<LettrResponse<SendEmailResponse>>(
+      const response = await lettr.post<LettrResponse<ScheduledEmail>>(
         '/emails/scheduled',
         body,
       );
       return {
-        content: [
-          {
-            type: 'text',
-            text: `Email scheduled for ${scheduled_at}. Request ID: ${response.data.request_id}, Accepted: ${response.data.accepted}, Rejected: ${response.data.rejected}`,
-          },
-        ],
+        content: [{ type: 'text', text: formatScheduledEmail(response.data) }],
       };
     },
   );
@@ -630,17 +693,17 @@ export function addEmailTools(
     {
       title: 'Get Scheduled Email',
       description:
-        'Retrieve details of a scheduled (but not yet sent) email, including its state, scheduled_at timestamp, recipients and any events collected so far.',
+        'Retrieve details of a scheduled email, including its state, scheduled_at timestamp, recipients and any events collected so far. Works for every state, not only pending ones — a cancelled or sent email is still readable.',
       inputSchema: {
-        transmission_id: z
+        request_id: z
           .string()
           .nonempty()
-          .describe('Transmission ID returned by schedule-email'),
+          .describe('The `sch_` request ID returned by schedule-email'),
       },
     },
-    async ({ transmission_id }) => {
-      const response = await lettr.get<LettrResponse<EmailDetail>>(
-        `/emails/scheduled/${encodeURIComponent(transmission_id)}`,
+    async ({ request_id }) => {
+      const response = await lettr.get<LettrResponse<ScheduledEmail>>(
+        `/emails/scheduled/${encodeURIComponent(request_id)}`,
       );
       const d = response.data;
       const eventLines =
@@ -649,19 +712,7 @@ export function addEmailTools(
           : d.events.map(formatEvent).join('\n');
       return {
         content: [
-          {
-            type: 'text',
-            text: [
-              `Transmission: ${d.transmission_id}`,
-              `State: ${d.state}`,
-              d.scheduled_at ? `Scheduled for: ${d.scheduled_at}` : null,
-              `From: ${d.from_name ? `${d.from_name} <${d.from}>` : d.from}`,
-              `Subject: ${d.subject}`,
-              `Recipients (${d.num_recipients}): ${d.recipients.join(', ')}`,
-            ]
-              .filter((x): x is string => x !== null)
-              .join('\n'),
-          },
+          { type: 'text', text: formatScheduledEmail(d) },
           { type: 'text', text: `Events:\n${eventLines}` },
         ],
       };
@@ -673,23 +724,69 @@ export function addEmailTools(
     {
       title: 'Cancel Scheduled Email',
       description:
-        'Cancel a scheduled email before it is sent. Before using this tool, you MUST confirm with the user that they really want to cancel this transmission — this action cannot be undone.',
+        'Cancel a scheduled email before it is sent. Before using this tool, you MUST confirm with the user that they really want to cancel this email — this action cannot be undone. Only an email still in the `scheduled` state can be cancelled.',
       inputSchema: {
-        transmission_id: z
+        request_id: z
           .string()
           .nonempty()
-          .describe('Transmission ID to cancel'),
+          .describe('The `sch_` request ID to cancel'),
       },
     },
-    async ({ transmission_id }) => {
-      await lettr.delete<{ message: string } | undefined>(
-        `/emails/scheduled/${encodeURIComponent(transmission_id)}`,
+    async ({ request_id }) => {
+      // Cancelling answers with the cancelled email, so report its real state
+      // rather than asserting success.
+      const response = await lettr.delete<LettrResponse<ScheduledEmail>>(
+        `/emails/scheduled/${encodeURIComponent(request_id)}`,
       );
+      return {
+        content: [{ type: 'text', text: formatScheduledEmail(response.data) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    'list-scheduled-emails',
+    {
+      title: 'List Scheduled Emails',
+      description:
+        'List emails waiting to be sent, soonest delivery time first. Use this to find the `sch_` request ID of an email the user describes but cannot name, before getting or cancelling it.',
+      inputSchema: {
+        status: z
+          .enum(['scheduled', 'sending', 'sent', 'cancelled', 'failed'])
+          .optional()
+          .describe(
+            'Only return emails in this state. Omit to see every state.',
+          ),
+        per_page: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe('Results per page (1-100, default 25)'),
+        page: z.number().int().min(1).optional().describe('Page number'),
+      },
+    },
+    async (input) => {
+      const response = await lettr.get<ScheduledEmailsListResponse>(
+        '/emails/scheduled',
+        input,
+      );
+      const { scheduled_emails, pagination } = response.data;
+
+      if (scheduled_emails.length === 0) {
+        return {
+          content: [{ type: 'text', text: 'No scheduled emails found.' }],
+        };
+      }
+
       return {
         content: [
           {
             type: 'text',
-            text: `Scheduled transmission "${transmission_id}" cancelled.`,
+            text: `Scheduled emails (total ${pagination.total}, page ${pagination.current_page} of ${pagination.last_page}, page size ${pagination.per_page}):\n\n${scheduled_emails
+              .map(formatScheduledEmail)
+              .join('\n\n')}`,
           },
         ],
       };
