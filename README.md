@@ -98,9 +98,10 @@ Environment variables:
 | `list-emails` | List recently sent emails (cursor-paginated, with recipient and date filters) |
 | `list-email-events` | List email events (delivery, bounce, click, open, …) with filters by type, recipient, transmission, and date range |
 | `get-email-detail` | Retrieve the full delivery timeline for a single transmission by request ID |
-| `schedule-email` | Schedule a transactional email for future delivery (5+ minutes ahead, within 3 days) |
-| `get-scheduled-email` | Get the state and events of a scheduled transmission |
-| `cancel-scheduled-email` | Cancel a scheduled transmission before it is sent |
+| `schedule-email` | Schedule a transactional email for future delivery (5+ minutes ahead, within 30 days) |
+| `list-scheduled-emails` | List emails waiting to be sent, with a state filter |
+| `get-scheduled-email` | Get the state and events of a scheduled email |
+| `cancel-scheduled-email` | Cancel a scheduled email before it is sent |
 
 ### Templates
 

@@ -5,6 +5,41 @@ All notable changes to the Lettr MCP project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`get-scheduled-email` reported every pending email as having no id.** It
+  printed `transmission_id`, which the API now leaves `null` until the email is
+  actually handed to the sending provider — so an agent reading back an email it
+  had just scheduled saw `Transmission: null` and had nothing to cancel with.
+  The tool now prints the `sch_` request ID, and says `Transmission: not sent
+  yet` rather than a bare null.
+- **`schedule-email`, `get-scheduled-email` and `cancel-scheduled-email` refused
+  valid requests up to 30 days out.** Their descriptions said the window was 3
+  days, which is what SparkPost allowed before Lettr held the schedule itself.
+  An agent reading that would talk the user out of a request the API accepts.
+- **`cancel-scheduled-email` asserted success it had not checked.** It discarded
+  the response and printed "cancelled" regardless. Cancelling now answers with
+  the cancelled email, so the tool reports its actual state.
+
+### Added
+
+- **`list-scheduled-emails` tool** — there was no way to ask what was queued, so
+  an agent could only act on an id the user had kept. It takes `status`
+  (`scheduled`, `sending`, `sent`, `cancelled`, `failed`), `per_page` and
+  `page`, and is the way to find the `sch_` id of an email the user can describe
+  but not name.
+
+### Changed
+
+- **`get-scheduled-email` and `cancel-scheduled-email` take `request_id`, not
+  `transmission_id`.** The parameter was renamed to match what it must now be
+  given: Lettr's `sch_` id. The old name told an agent to pass the provider's
+  id, which no longer addresses a scheduled email. The two ids are genuinely
+  different things — `transmission_id` is what webhook events carry, and it
+  exists only once the email has been sent.
+
 ## [1.6.0] - 2026-09-11
 
 Brings the MCP server level with the SDKs: template purpose, the folders
