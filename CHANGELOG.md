@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-22
+
 ### Fixed
 
 - **`get-scheduled-email` reported every pending email as having no id.** It
