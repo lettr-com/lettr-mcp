@@ -1,5 +1,29 @@
 # Lettr MCP Server
 
+> [!IMPORTANT]
+> **This package is no longer being updated. Use Lettr's hosted MCP server instead:** `https://app.lettr.com/mcp`
+>
+> The hosted server is maintained alongside the Lettr API, so new tools and fixes land there and not here. This package keeps working, but it will not gain anything further.
+>
+> **Switching, with the Lettr account you sign into (OAuth):**
+>
+> ```bash
+> claude mcp add --transport http lettr https://app.lettr.com/mcp
+> ```
+>
+> Then authenticate when your client prompts — no API key to manage.
+>
+> **Switching, with an API key** for CI, cron jobs and other places with no browser:
+>
+> ```bash
+> claude mcp add --transport http lettr https://app.lettr.com/mcp \
+>   --header "Authorization: Bearer lttr_xxxxxxxxx"
+> ```
+>
+> See [Connect with an API Key](https://docs.lettr.com/learn/mcp/api-key-auth) and the [remote server setup guide](https://docs.lettr.com/learn/mcp/setup) for Cursor, Claude Desktop and other clients.
+>
+> A few differences worth knowing before you move: tool names use `snake_case` there (`send_email`, not `send-email`), some parameters are named differently (`contact_id` rather than `contactId`), and the hosted server has tools this package never had — analytics, email events and API logs.
+
 The official [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server for [Lettr](https://lettr.com) — the email API for developers. Send transactional emails, manage templates with merge tags, configure domains, and monitor webhooks — directly from any MCP client like [Claude Desktop](https://claude.ai/download), [Cursor](https://cursor.com), or [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
 
 ## Why Lettr?
